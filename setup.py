@@ -2,7 +2,7 @@ import setuptools
 
 setuptools.setup(
     name="sscv",
-    version="0.1.0",
+    version="0.1.12",
     license='MIT',
     author="Byunghyun Kim",
     author_email="kimbh.mail@gmail.com",
