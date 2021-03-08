@@ -1,8 +1,7 @@
 import cv2
 import numpy as np 
 import os
-import slidingwindow as sw
-
+import warnings
 
 
 def imread(filename, flags=cv2.IMREAD_COLOR, dtype=np.uint8):
@@ -33,13 +32,42 @@ def imwrite(filename, imageRGB, params=None):
         return False
 
 
+def apply_ColorToImage(img, mask, color_mask,
+                       img_ratio = 0.3, color_ratio = 0.7
+                       ) :
+
+    """
+    Apply color to where mask value equals 1
+
+    Arg:
+        img (numpy.uint8) : original image
+        mask (numpy.bool) : mask to apply color
+        color_mask(numpy.uint8) : color to be applied to mask
+        img_ratio(float) : Brightness ratio to be kept from original image
+        color_ratio(float) : Brightness ratio to be kept from color
+
+    Returns:
+        colored_img(numpy.uint8) : image
+
+    """
+
+    if (mask.dtype != 'np.bool') :
+        warnings.warn("The input variable 'mask' is not an numpy.bool array")
+        warnings.warn("Variable mask is converted to numpy.bool array")
+        mask = mask.astype(np.bool)
+
+    img[mask, :] = img[mask, :] * img_ratio + color_mask * color_ratio
+    return
+
 def inference_detector_sliding_window(model, input_img, color_mask,
                                       score_thr = 0.1, window_size = 1024, overlap_ratio = 0.5,):
     from tqdm import tqdm
     from mmdet.apis import inference_detector
 
-    import pycocotools.mask as maskUtils
     import mmcv
+
+    import pycocotools.mask as maskUtils
+    import slidingwindow as sw
 
 
     '''
@@ -99,3 +127,5 @@ def inference_detector_sliding_window(model, input_img, color_mask,
     img_result[mask_output_bool, :] = img_result[mask_output_bool,:] * 0.3 + color_mask * 0.6
 
     return img_result, mask_output
+
+
