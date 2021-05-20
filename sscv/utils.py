@@ -2,6 +2,7 @@ import cv2
 import numpy as np 
 import os
 import warnings
+import operator
 
 
 def imread(filename, flags=cv2.IMREAD_COLOR, dtype=np.uint8):
@@ -30,34 +31,79 @@ def imwrite(filename, imageRGB, params=None):
     except Exception as e:
         print(e)
         return False
-
-
-def apply_ColorToImage(img, mask, color_mask,
-                       img_ratio = 0.3, color_ratio = 0.7
-                       ) :
-
+        
+def resize(image, width = None, height = None, inter = cv2.INTER_AREA):
+    
     """
-    Apply color to where mask value equals 1
-
-    Arg:
-        img (numpy.uint8) : original image
-        mask (numpy.bool) : mask to apply color
-        color_mask(numpy.uint8) : color to be applied to mask
-        img_ratio(float) : Brightness ratio to be kept from original image
-        color_ratio(float) : Brightness ratio to be kept from color
-
-    Returns:
-        colored_img(numpy.uint8) : image
-
+    Code Reference: 
+    https://stackoverflow.com/questions/44650888/resize-an-image-without-distortion-opencv
     """
+    # initialize the dimensions of the image to be resized and
+    # grab the image size
+    dim = None
+    (h, w) = image.shape[:2]
 
-    if (mask.dtype != 'np.bool') :
-        warnings.warn("The input variable 'mask' is not an numpy.bool array")
-        warnings.warn("Variable mask is converted to numpy.bool array")
-        mask = mask.astype(np.bool)
+    # if both the width and height are None, then return the
+    # original image
+    if width is None and height is None:
+        return image
 
-    img[mask, :] = img[mask, :] * img_ratio + color_mask * color_ratio
-    return
+    # check to see if the width is None
+    if width is None:
+        # calculate the ratio of the height and construct the
+        # dimensions
+        r = height / float(h)
+        dim = (int(w * r), height)
+
+    # otherwise, the height is None
+    else:
+        # calculate the ratio of the width and construct the
+        # dimensions
+        r = width / float(w)
+        dim = (width, int(h * r))
+
+    # resize the image
+    resized = cv2.resize(image, dim, interpolation = inter)
+
+    # return the resized image
+    return resized
+
+def comparison_operator(img, thr, ind='>'):
+    if ind == '==':
+        return operator.eq(img, thr)
+    elif ind == '<':
+        return operator.lt(img, thr)
+    elif ind == '>':
+        return operator.gt(img, thr)
+    elif ind == '!=':
+        return operator.ne(img, thr)
+
+# def apply_ColorToImage(img, mask, color_mask,
+#                        img_ratio = 0.3, color_ratio = 0.7
+#                        ) :
+
+#     """
+#     Apply color to where mask value equals 1
+
+#     Arg:
+#         img (numpy.uint8) : original image
+#         mask (numpy.bool) : mask to apply color
+#         color_mask(numpy.uint8) : color to be applied to mask
+#         img_ratio(float) : Brightness ratio to be kept from original image
+#         color_ratio(float) : Brightness ratio to be kept from color
+
+#     Returns:
+#         colored_img(numpy.uint8) : image
+
+#     """
+
+#     if (mask.dtype != 'bool') :
+#         warnings.warn("The input variable 'mask' is not an numpy.bool array")
+#         warnings.warn("Variable mask is converted to numpy.bool array")
+#         mask = mask.astype(np.bool)
+
+#     img[mask, :] = img[mask, :] * img_ratio + color_mask * color_ratio
+#     return
 
 def inference_detector_sliding_window(model, input_img, color_mask,
                                       score_thr = 0.1, window_size = 1024, overlap_ratio = 0.5,):
