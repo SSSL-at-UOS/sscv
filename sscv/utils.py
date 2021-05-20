@@ -175,3 +175,147 @@ def inference_detector_sliding_window(model, input_img, color_mask,
     return img_result, mask_output
 
 
+
+def connect_cracks(mask_output, epsilon = 200):
+    '''
+    :param mask_output: a numpy uint8 variable
+    :param epsilon: distance between cracks to be connected
+    :return: connect_mask_output : crack-connection result
+    '''
+
+
+
+    '''
+    To-dos : 
+    1 . Add iteration option
+    2 . Add connection option considering a direction of a crack
+    with the direction of ellipse of each crack 
+    '''
+
+    # label each crack
+    labels, num = label(mask_output, connectivity=2, return_num=True)
+    # get information of each crack area
+    crack_region_table = regionprops_table(labels, properties=('label', 'bbox', 'coords', 'orientation'))
+
+    width = crack_region_table['bbox-3'] - crack_region_table['bbox-1']
+    height = crack_region_table['bbox-2'] - crack_region_table['bbox-0']
+
+    crack_region_table['is_horizontal'] = width > height
+
+    connecting_directions = ['x_axis', 'y_axis']
+    connect_line_img = np.zeros_like(mask_output, dtype=np.uint8)
+
+    for connecting_direction in connecting_directions:
+
+        e2_list = []
+        e1_list = []
+
+        for crack_num, crack_region in enumerate(crack_region_table['label']):
+
+            min_row = crack_region_table['bbox-0'][crack_num]
+            min_col = crack_region_table['bbox-1'][crack_num]
+            max_row = crack_region_table['bbox-2'][crack_num] - 1
+            max_col = crack_region_table['bbox-3'][crack_num] - 1
+
+            if crack_region_table['is_horizontal'][crack_num]:
+                # max col / min col
+                col = crack_region_table['coords'][crack_num][:, 1]
+
+                e2 = crack_region_table['coords'][crack_num][np.argwhere(col == max_col), :][-1][0]
+                e1 = crack_region_table['coords'][crack_num][np.argwhere(col == min_col), :][0][0]
+
+                if connecting_direction == 'y_axis' and e2[0] < e1[0]:
+                    e2, e1 = e1, e2
+
+                e2_list.append(e2)
+                e1_list.append(e1)
+
+            else:
+                # max row / min row
+                row = crack_region_table['coords'][crack_num][:, 0]
+
+                e2 = crack_region_table['coords'][crack_num][np.argwhere(row == max_row), :][-1][0]
+                e1 = crack_region_table['coords'][crack_num][np.argwhere(row == min_row), :][0][0]
+
+                if connecting_direction == 'x_axis' and e2[1] < e1[1]:
+                    e2, e1 = e1, e2
+
+                e2_list.append(e2)
+                e1_list.append(e1)
+
+        crack_region_table['e2'] = e2_list
+        crack_region_table['e1'] = e1_list
+
+
+        n = len(crack_region_table['label'])
+        color = (1)  # binary image
+
+
+        for num_e2, e2 in enumerate(crack_region_table['e2']):
+
+            connect_candidates_e2 = []
+            connect_candidates_e1 = []
+            distance_list = []
+
+            for num_e1, e1 in enumerate(crack_region_table['e1']):
+
+                if num_e2 != num_e1:
+                    d = np.subtract(e1, e2)
+                    distance = np.sqrt(d[0] ** 2 + d[1] ** 2)
+
+
+                    vector_1 = np.asarray(crack_region_table['e1'][num_e2] - e2, dtype=np.float64)
+                    vector_2 = np.asarray(e2 - e1, dtype=np.float64)
+
+                    unit_vector_1 = vector_1 / np.linalg.norm(vector_1)
+                    unit_vector_2 = vector_2 / np.linalg.norm(vector_2)
+                    dot_product = np.dot(unit_vector_1, unit_vector_2)
+                    angle_1 = np.arccos(dot_product)
+
+
+                    vector_1 = np.asarray(crack_region_table['e1'][num_e2] - e2, dtype=np.float64)
+                    vector_2 = np.asarray(e1 - crack_region_table['e2'][num_e1], dtype=np.float64)
+
+                    unit_vector_1 = vector_1 / np.linalg.norm(vector_1)
+                    unit_vector_2 = vector_2 / np.linalg.norm(vector_2)
+                    dot_product = np.dot(unit_vector_1, unit_vector_2)
+                    angle_2 = np.arccos(dot_product)
+
+
+                    if (distance < epsilon) and (angle_1 < 1.5 / 2) and (angle_2 < 1.5 / 2):
+                        distance_list.append(distance)
+                        connect_candidates_e2.append(tuple(e2[::-1]))
+                        connect_candidates_e1.append(tuple(e1[::-1]))
+
+            if distance_list :
+                connect_idx = np.argmin(distance_list)
+                connect_e2 = connect_candidates_e2[connect_idx]
+                connect_e1 = connect_candidates_e1[connect_idx]
+                connect_line_img = cv2.line(connect_line_img, connect_e2, connect_e1, color, 8)
+
+    mask_output = mask_output + connect_line_img
+    mask_output[mask_output > 1] = 1
+
+    return mask_output
+
+def remove_cracks(mask_output, threshold = 300):
+    '''
+    :param mask_output: a numpy uint8 variable
+    :param threshold: cracks of which length is under thershold will be removed.
+    :return: mask_output : crack mask after thresholding
+    '''
+
+    labels, num = label(mask_output, connectivity=2, return_num=True)
+    crack_region_table = regionprops_table(labels, properties=('label', 'bbox', 'coords'))
+
+    width = crack_region_table['bbox-3'] - crack_region_table['bbox-1']
+    height = crack_region_table['bbox-2'] - crack_region_table['bbox-0']
+    crack_region_table['diagonal_length'] = np.sqrt(height**2 + width**2)
+
+    for crack_num in range(len(crack_region_table['label'])):
+        if crack_region_table['diagonal_length'][crack_num] < threshold :
+            for c in crack_region_table['coords'][crack_num]:
+                mask_output[c[0], c[1]] = 0
+
+    return mask_output
+
